@@ -115,8 +115,7 @@ def increase_value(start,modifier):
         start[i]=start[i]+modifier[i]
 
     return start
-
-def calculate_reward(start, modifier, inventory_points, standard=2):
+def calculate_reward(start,modifier,standard = 2):
     cost = 0
     security,luxury,popularity,service,quality,environment = start
     security_mod,luxury_mod,popularity_mod,service_mod,quality_mod,environment_mod = modifier
@@ -129,84 +128,44 @@ def calculate_reward(start, modifier, inventory_points, standard=2):
     customer_flow = calculate_customer_flow(popularity,popularity_mod,service)
     exp_flow = calculate_customer_flow(popularity,exp_mod,service)
     least_flow = calculate_customer_flow(popularity,least_mod,service)
-    food_consumption = food_expanse(customer_flow,standard)
     storage_deduct = food_expanse(customer_flow,standard)
     exp_deduct = food_expanse(exp_flow,standard)
     least_deduct = food_expanse(least_flow,standard)
+    return earning,exp_earning,least_earning,storage_deduct,exp_deduct,least_deduct,cost
 
-    inventory_points = max(0, inventory_points - food_consumption)
-    quality = calculate_quality_from_inventory(inventory_points)
-
-    return earning,exp_earning,least_earning,storage_deduct,exp_deduct,least_deduct,cost, food_consumption, inventory_points, quality
-
-
-def calculate_quality_from_inventory(inventory_points):
-    """根据剩余库存点数计算质量"""
-    if inventory_points <= 0:
-        return 0
-    else:
-        return max(0, min(20, inventory_points // 100))
-
-def calculate_competitiveness(attributes):
-    """计算竞争力，即所有属性之和"""
-    return sum(attributes.values())
-
-
-# --- 插件类 (修改部分) ---
-@register(name="TavernSimulatorPlugin", description="丽芙酒馆营业规则模拟插件", version="1.3", author="YourName") # 版本更新为 1.3
+# --- 插件类 (修改后) ---
+@register(name="TavernSimulatorPlugin", description="丽芙酒馆营业规则模拟插件", version="1.2", author="YourName") # 版本更新为 1.2
 class TavernSimulatorPlugin(BasePlugin):
 
     def __init__(self, host: APIHost):
-        self.initial_tavern_state = { # 定义初始酒馆状态
-            "attributes": {
-                "security": 20, # 第一周初始值
-                "luxury": 22,   # 第一周初始值
-                "popularity": 100, # 第一周初始值
-                "service": 100,  # 第一周初始值
-                "environment": 18, # 第一周初始值
-                "quality": 20,   # 初始质量设为 0，会在 initialize 中根据库存计算
-            },
-            "inventory_points": 2000, # 初始库存点数
-            "last_cost": 9220, # 第一周总投入
+        # 第一周初始数值 (修改初始化数值)
+        self.initial_attributes = { # 保存初始属性，用于 "初始化" 命令
+            "security": 20,
+            "luxury": 22,
+            "popularity": 100,
+            "service": 100,
+            "environment": 18,
+            "quality": 100,
+            "inventory": 2000, # 初始化库存
         }
-        self.tavern_attributes = {} # 初始化为空字典，在 initialize 中加载
-        self.inventory_points = 0 # 初始化为 0，在 initialize 中加载
-        self.last_cost = 0 # 初始化为 0，在 initialize 中加载
+        self.tavern_attributes = self.initial_attributes.copy() # 使用 copy() 避免直接修改 initial_attributes
+        self.last_cost = 0
         self.last_earning_info = {}
-        self.last_food_consumption = 0
-        self.last_competitiveness = 0
-
+        self.saved_attributes = None # 用于存档功能，初始为 None
 
 
     async def initialize(self):
-        """插件初始化时加载初始酒馆状态"""
-        self._load_initial_state() # 调用加载初始状态函数
-
-    def _load_initial_state(self): # 新增函数：加载初始状态
-        """加载初始酒馆状态"""
-        self.tavern_attributes = self.initial_tavern_state["attributes"].copy() # 从 initial_tavern_state 复制属性
-        self.inventory_points = self.initial_tavern_state["inventory_points"] # 从 initial_tavern_state 加载库存点数
-        self.last_cost = self.initial_tavern_state["last_cost"] # 从 initial_tavern_state 加载上次成本
-        self.tavern_attributes["quality"] = calculate_quality_from_inventory(self.inventory_points) # 根据初始库存计算质量
-        self.last_competitiveness = calculate_competitiveness(self.tavern_attributes) # 初始化竞争力
-
-
-    def _save_current_state_as_initial(self): # 新增函数：保存当前状态为初始状态
-        """将当前酒馆状态保存为新的初始状态"""
-        self.initial_tavern_state["attributes"] = self.tavern_attributes.copy() # 将当前属性复制到 initial_tavern_state
-        self.initial_tavern_state["inventory_points"] = self.inventory_points # 将当前库存点数保存到 initial_tavern_state
-        self.initial_tavern_state["last_cost"] = self.last_cost # 保存当前 last_cost 作为初始 last_cost
-        # 注意：这里只保存了属性、库存和 last_cost 作为 “初始状态”，其他运营数据 (如 last_earning_info, last_food_consumption) 不会被保存为初始状态，因为初始化通常意味着重置运营数据。
-
+        pass
 
     async def _handle_tavern_command(self, ctx: EventContext, command: str, args_str: str = ""):
         """处理酒馆相关命令"""
         sender_id = ctx.event.sender_id if isinstance(ctx.event, GroupNormalMessageReceived) else "user"
 
         if command == "查看":
-            attributes_str = "\n".join([f"{name.capitalize()}: {value}" for name, value in self.tavern_attributes.items()])
-            competitiveness = calculate_competitiveness(self.tavern_attributes)
-            reply = f"<{sender_id}>的丽芙酒馆属性:\n{attributes_str}\n\n当前库存点: {self.inventory_points} 龙金\n竞争力: {competitiveness}\n\n上次运营总投入: {self.last_cost} 龙金\n上次运营收益:\n{self._format_earning_info(self.last_earning_info)}\n上次食物消耗: {self.last_food_consumption} 龙金"
+            # 计算竞争力
+            competitiveness = self._calculate_competitiveness() # 调用新的竞争力计算函数
+            attributes_str = "\n".join([f"{name.capitalize()}: {value}" for name, value in self.tavern_attributes.items() if name != 'inventory']) #  查看时不显示库存
+            reply = f"<{sender_id}>的丽芙酒馆属性:\n{attributes_str}\n竞争力: {competitiveness}\n\n当前库存: {self.tavern_attributes['inventory']} 龙金\n上次运营总投入: {self.last_cost} 龙金\n上次运营收益:\n{self._format_earning_info(self.last_earning_info)}"
             ctx.add_return("reply", [reply])
         elif command == "提升":
             parts = args_str.split()
@@ -239,6 +198,10 @@ class TavernSimulatorPlugin(BasePlugin):
                         elif attribute_name == "environment":
                             self.tavern_attributes["environment"] = min(self.tavern_attributes["environment"] + amount, 20)
                             cost = 0
+                        elif attribute_name == "inventory": #  不允许直接提升库存，给出提示
+                            reply = f"<{sender_id}> 不支持直接提升库存，库存通过运营收入补充。"
+                            ctx.add_return("reply", [reply])
+                            return # 提前返回，不执行后续回复代码
                         else:
                             cost = 0
 
@@ -252,9 +215,22 @@ class TavernSimulatorPlugin(BasePlugin):
 
 
         elif command == "计算":
-            start_attributes = list(self.tavern_attributes.values())
+            start_attributes = list(self.tavern_attributes.values())[:6] #  只取前 6 个属性 (安全, 奢华, 人气, 服务, 环境, 质量) 用于计算
             modifier = [0, 0, 0, 0, 0, 0]
-            earning, exp_earning, least_earning, storage_deduct, exp_deduct, least_deduct, cost, food_consumption, updated_inventory_points, updated_quality = calculate_reward(start_attributes, modifier, self.inventory_points)
+            earning, exp_earning, least_earning, storage_deduct, exp_deduct, least_deduct, cost = calculate_reward(start_attributes, modifier)
+
+            customer_flow = calculate_customer_flow(self.tavern_attributes["popularity"], 0, self.tavern_attributes["service"]) # 使用当前人气和服务计算客流
+            storage_deduct_actual = food_expanse(customer_flow, standard=2) # 计算实际食物消耗
+            self.tavern_attributes["inventory"] -= storage_deduct_actual # 扣减库存
+
+            if self.tavern_attributes["inventory"] < 0: # 库存耗尽
+                storage_deduct_actual += self.tavern_attributes["inventory"] # 实际消耗不能为负数
+                storage_deduct_actual = max(0, storage_deduct_actual) # 确保消耗不为负
+                self.tavern_attributes["inventory"] = 0 # 库存归零
+                self.tavern_attributes["quality"] = 0 # 质量重置为 0
+                quality_reset_message = "\n**警告：库存已耗尽，质量已重置为 0！**" # 警告信息
+            else:
+                quality_reset_message = "" # 无警告信息
 
             self.last_cost = cost
             self.last_earning_info = {
@@ -265,34 +241,39 @@ class TavernSimulatorPlugin(BasePlugin):
                 "期望储存": exp_deduct,
                 "最少储存": least_deduct,
             }
-            self.inventory_points = updated_inventory_points
-            self.tavern_attributes["quality"] = updated_quality
-            self.last_food_consumption = food_consumption
-            competitiveness = calculate_competitiveness(self.tavern_attributes)
-            self.last_competitiveness = competitiveness
 
             earning_reply = self._format_earning_info(self.last_earning_info)
+            competitiveness = self._calculate_competitiveness() # 计算竞争力
 
-            reply = f"<{sender_id}> 丽芙酒馆本周期运营计算结果:\n\n{earning_reply}\n总运营成本 (不含食物储存): {cost} 龙金\n食物储存成本:\n  随机: {storage_deduct} 龙金\n  期望: {exp_deduct} 龙金\n  最少: {least_deduct} 龙金\n食物消耗: {food_consumption} 龙金\n剩余库存点: {self.inventory_points} 龙金 (质量已根据库存自动调整为: {self.tavern_attributes['quality']})\n竞争力: {competitiveness}"
+            reply = f"<{sender_id}> 丽芙酒馆本周期运营计算结果:\n竞争力: {competitiveness}\n\n{earning_reply}\n总运营成本 (不含食物储存): {cost} 龙金\n食物储存成本: {storage_deduct_actual} 龙金 (实际消耗，已从库存扣除){quality_reset_message}\n剩余库存: {self.tavern_attributes['inventory']} 龙金"
             ctx.add_return("reply", [reply])
+
+        elif command == "初始化": # 初始化命令
+            self.tavern_attributes = self.initial_attributes.copy() # 重置为初始属性
+            self.last_cost = 0 # 重置上次成本
+            self.last_earning_info = {} # 重置上次收益信息
+            reply = f"<{sender_id}> 丽芙酒馆属性已重置为第一周初始值。"
+            ctx.add_return("reply", [reply])
+
+        elif command == "存档": # 存档命令 (初步实现)
+            self.saved_attributes = { # 保存当前状态
+                "attributes": self.tavern_attributes.copy(),
+                "last_cost": self.last_cost,
+                "last_earning_info": self.last_earning_info.copy(),
+            }
+            reply = f"<{sender_id}> 丽芙酒馆当前状态已存档。"
+            ctx.add_return("reply", [reply])
+
         elif command == "帮助" or command == "help":
             reply = self._format_help_message()
             ctx.add_return("reply", [reply])
-        elif command == "初始化": # 新增 "初始化" 命令处理
-            self._load_initial_state() # 调用加载初始状态函数
-            reply = self._format_initialization_message() # 格式化初始化完成消息
-            ctx.add_return("reply", [reply])
-        elif command == "存档": # 新增 "存档" 命令处理
-            self._save_current_state_as_initial() # 调用保存当前状态为初始状态函数
-            reply = self._format_save_message() # 格式化存档完成消息
-            ctx.add_return("reply", [reply])
         else:
-            reply = f"<{sender_id}> 未知酒馆命令: '{command}'，支持命令: 查看, 提升, 计算, 帮助, 初始化, 存档" # 更新支持命令列表
+            reply = f"<{sender_id}> 未知酒馆命令: '{command}'，支持命令: 查看, 提升, 计算, 初始化, 存档, 帮助" #  添加 "初始化" 和 "存档" 到帮助提示
             ctx.add_return("reply", [reply])
 
 
     def _format_earning_info(self, earning_info):
-        """格式化运营收益信息为易于阅读的字符串"""
+        """格式化运营收益信息为易于阅读的字符串 (保持不变)"""
         info_lines = [
             f"随机净利润: {earning_info.get('随机赚取', 'N/A')} 龙金",
             f"期望净利润: {earning_info.get('期望赚取', 'N/A')} 龙金",
@@ -301,46 +282,42 @@ class TavernSimulatorPlugin(BasePlugin):
         return "\n".join(info_lines)
 
     def _format_help_message(self):
-        """格式化帮助信息为易于阅读的字符串"""
+        """格式化帮助信息为易于阅读的字符串 (更新帮助信息)"""
         help_lines = [
             "**丽芙酒馆营业规则模拟插件 - 帮助信息**",
             "",
             "**命令列表:**",
-            "- `.酒馆 查看` 或 `.tavern 查看`:  查看当前丽芙酒馆的各项属性值、库存点、竞争力和上次运营信息。",
-            "- `.酒馆 提升 <属性> <数值>` 或 `.tavern 提升 <属性> <数值>`: 提升指定属性，例如 `.酒馆 提升 安全 5`。 可提升属性包括: 安全, 奢华, 人气, 服务, 质量, 环境。",
-            "- `.酒馆 计算` 或 `.tavern 计算`:  进行本周期酒馆运营计算，显示收益、成本、食物储存、食物消耗、剩余库存点和竞争力。",
-            "- `.酒馆 初始化` 或 `.tavern 初始化`:  将酒馆属性、库存等重置为第一周初始状态。", # 添加 初始化 命令说明
-            "- `.酒馆 存档` 或 `.tavern 存档`:  将当前酒馆属性、库存等保存为新的初始状态，下次初始化将使用存档后的状态。", # 添加 存档 命令说明
+            "- `.酒馆 查看` 或 `.tavern 查看`:  查看当前丽芙酒馆的各项属性值、竞争力、库存和上次运营收益信息。",
+            "- `.酒馆 提升 <属性> <数值>` 或 `.tavern 提升 <属性> <数值>`: 提升指定属性，例如 `.酒馆 提升 安全 5`。 可提升属性包括: 安全, 奢华, 人气, 服务, 质量, 环境 (不支持直接提升库存)。", #  更新属性说明
+            "- `.酒馆 计算` 或 `.tavern 计算`:  进行本周期酒馆运营计算，显示收益、成本、食物储存预估和实际库存消耗。 **注意：每次'计算'命令会实际扣除库存，并可能重置质量属性。**", #  添加库存消耗和质量重置警告
+            "- `.酒馆 初始化` 或 `.tavern 初始化`:  将丽芙酒馆属性重置为第一周的初始值 (安全: 20, 奢华: 22, 人气: 100, 服务: 100, 环境: 18, 质量: 100, 库存: 2000)。", #  添加初始化命令说明和初始值
+            "- `.酒馆 存档` 或 `.tavern 存档`:  保存当前丽芙酒馆的状态 (属性、成本、收益信息)。 **当前存档功能为初步实现，重启后存档会丢失。**", #  添加存档命令说明和警告
             "- `.酒馆 帮助` 或 `.tavern 帮助`:  显示本插件的帮助信息。",
             "",
             "**属性说明:**",
-            "- **安全:**  影响酒馆安全事件发生几率。",
-            "- **奢华:**  影响顾客群体和随机事件。",
-            "- **人气:**  影响顾客数量，需持续投入维护。",
-            "- **服务:**  影响顾客满意度和员工薪资。",
-            "- **环境:**  影响顾客体验，设施完善程度。",
-            "- **质量:**  代表原材料质量，初始值由库存决定，周期后根据库存自动调整。",
-            "",
-            "**库存点:** 代表酒馆的资金储备，用于购买食物原材料。消耗后质量会降低，耗尽后质量降为0。",
-            "**竞争力:**  每周期的维度总和，影响运营期间的随机竞争对手事件。",
+            "- **安全:**  影响酒馆安全事件发生几率。提升成本: 每点 50 龙金。",
+            "- **奢华:**  影响顾客群体和随机事件。提升成本: 每点 500 龙金 (超过 20 点后每点 1000 龙金)。",
+            "- **人气:**  影响顾客数量，需持续投入维护。提升成本: 每点 10 龙金 (超过 20 点后每点 50 龙金)。",
+            "- **服务:**  影响顾客满意度和员工薪资。提升成本: 每点 20 龙金。",
+            "- **环境:**  影响顾客体验，设施完善程度。提升无成本，上限 20 点。",
+            "- **质量:**  代表原材料质量，影响食物消耗量和顾客满意度。提升成本: 每点 20 龙金 (超过 20 点后每点 50 龙金)。每周期质量依据上一周期消耗的食物总量决定数值 (库存耗尽后重置为 0)。", #  更新质量属性说明，添加库存耗尽重置质量的说明
+            "- **库存:**  代表酒馆当前拥有的食物原材料，初始值为 2000 龙金。每次 '计算' 命令会根据客流消耗库存。库存耗尽后质量会重置为 0。", #  添加库存属性说明
+            "- **竞争力:**  每周期的维度总和，决定运营期间的随机竞争对手事件。(计算值，不可直接提升)", # 添加竞争力说明
             "",
             "**使用示例:**",
             "  `.酒馆 查看`",
             "  `.tavern 提升 奢华 10`",
             "  `.酒馆 计算`",
-            "  `.酒馆 初始化`",
-            "  `.tavern 存档`",
+            "  `.tavern 初始化`", # 添加初始化示例
+            "  `.tavern 存档`", # 添加存档示例
             "  `.tavern 帮助`",
         ]
         return "\n".join(help_lines)
 
-    def _format_initialization_message(self): # 新增函数：格式化初始化完成消息
-        """格式化初始化完成消息"""
-        return "<user> 丽芙酒馆已初始化为第一周初始状态。"
-
-    def _format_save_message(self): # 新增函数：格式化存档完成消息
-        """格式化存档完成消息"""
-        return "<user> 丽芙酒馆当前状态已保存为新的初始状态。下次初始化将使用当前存档状态。"
+    def _calculate_competitiveness(self): # 新增竞争力计算函数
+        """计算竞争力，即六个维度的总和"""
+        attributes = self.tavern_attributes
+        return sum([attributes["security"], attributes["luxury"], attributes["popularity"], attributes["service"], attributes["environment"], attributes["quality"]])
 
 
     @handler(PersonNormalMessageReceived)
