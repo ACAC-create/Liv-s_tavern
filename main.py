@@ -2,7 +2,7 @@ from pkg.plugin.context import register, handler, BasePlugin, APIHost, EventCont
 from pkg.plugin.events import PersonNormalMessageReceived, GroupNormalMessageReceived
 import random
 
-# --- 复制你的朋友提供的 Python 脚本中的函数定义 (从这里开始) ---
+# --- Function definitions (No Change) ---
 def increase_security(security,cost,amount):
     if security + amount < 20:
         security = security + amount
@@ -103,7 +103,7 @@ def calculate_all_earning(security,luxury,popularity,service,environment,quality
            criteria_earning,criteria_exp_earning,criteria_least_earning = calculate_earning(criteria,False)
        earning = earning + criteria_earning
        exp_earning = exp_earning + criteria_exp_earning
-       least_earning = least_earning + criteria_least_earning
+       least_earning = least_earning + least_earning
        count = count + 1
     if return_all:
         return earning,exp_earning,least_earning,mod,exp_mod,least_mod
@@ -132,10 +132,9 @@ def calculate_reward(start,modifier,standard = 2):
     exp_deduct = food_expanse(exp_flow,standard)
     least_deduct = food_expanse(least_flow,standard)
     return earning,exp_earning,least_earning,storage_deduct,exp_deduct,least_deduct,cost
-# --- 复制你的朋友提供的 Python 脚本中的函数定义 (到这里结束) ---
 
-
-@register(name="TavernSimulatorPlugin", description="丽芙酒馆营业规则模拟插件", version="1.0", author="YourName")
+# --- Plugin Class with Help Function ---
+@register(name="TavernSimulatorPlugin", description="丽芙酒馆营业规则模拟插件", version="1.1", author="YourName") # Updated version to 1.1
 class TavernSimulatorPlugin(BasePlugin):
 
     def __init__(self, host: APIHost):
@@ -223,9 +222,11 @@ class TavernSimulatorPlugin(BasePlugin):
 
             reply = f"<{sender_id}> 丽芙酒馆本周期运营计算结果:\n\n{earning_reply}\n总运营成本 (不含食物储存): {cost} 龙金\n食物储存成本:\n  随机: {storage_deduct} 龙金\n  期望: {exp_deduct} 龙金\n  最少: {least_deduct} 龙金"
             ctx.add_return("reply", [reply])
-
+        elif command == "帮助" or command == "help": # Help command handling
+            reply = self._format_help_message()
+            ctx.add_return("reply", [reply])
         else:
-            reply = f"<{sender_id}> 未知酒馆命令: '{command}'，支持命令: 查看, 提升, 计算"
+            reply = f"<{sender_id}> 未知酒馆命令: '{command}'，支持命令: 查看, 提升, 计算, 帮助" # Help in unknown command message
             ctx.add_return("reply", [reply])
 
 
@@ -237,6 +238,33 @@ class TavernSimulatorPlugin(BasePlugin):
             f"最少净利润: {earning_info.get('最少赚取', 'N/A')} 龙金",
         ]
         return "\n".join(info_lines)
+
+    def _format_help_message(self): # Help message formatting function
+        """格式化帮助信息为易于阅读的字符串"""
+        help_lines = [
+            "**丽芙酒馆营业规则模拟插件 - 帮助信息**",
+            "",
+            "**命令列表:**",
+            "- `.酒馆 查看` 或 `.tavern 查看`:  查看当前丽芙酒馆的各项属性值和上次运营收益信息。",
+            "- `.酒馆 提升 <属性> <数值>` 或 `.tavern 提升 <属性> <数值>`: 提升指定属性，例如 `.酒馆 提升 安全 5`。 可提升属性包括: 安全, 奢华, 人气, 服务, 质量, 环境。",
+            "- `.酒馆 计算` 或 `.tavern 计算`:  进行本周期酒馆运营计算，并显示收益、成本和食物储存预估。",
+            "- `.酒馆 帮助` 或 `.tavern 帮助`:  显示本插件的帮助信息。",
+            "",
+            "**属性说明:**",
+            "- **安全:**  影响酒馆安全事件发生几率。",
+            "- **奢华:**  影响顾客群体和随机事件。",
+            "- **人气:**  影响顾客数量，需持续投入维护。",
+            "- **服务:**  影响顾客满意度和员工薪资。",
+            "- **环境:**  影响顾客体验，设施完善程度。",
+            "- **质量:**  影响食物原材料质量，与食物消耗量相关。",
+            "",
+            "**使用示例:**",
+            "  `.酒馆 查看`",
+            "  `.tavern 提升 奢华 10`",
+            "  `.酒馆 计算`",
+            "  `.tavern 帮助`",
+        ]
+        return "\n".join(help_lines)
 
 
     @handler(PersonNormalMessageReceived)
